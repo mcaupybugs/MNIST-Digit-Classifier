@@ -7,6 +7,7 @@ import androidx.core.content.ContextCompat;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -21,22 +22,28 @@ import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import org.tensorflow.lite.Interpreter;
+
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 
 public class MainActivity extends AppCompatActivity {
 
     Button submitButton;
     Paint paintDraw;
     RelativeLayout drawingSpace;
-
+    Interpreter tflite;
     final int ROS_IMAGE1 = 1;
 
     Uri source;
     Bitmap bitmapMaster;
     Canvas canvasMaster;
     MyDrawView myDrawView;
-    int prvX,prvY;
+    int prvX, prvY;
 
 
     @Override
@@ -60,29 +67,45 @@ public class MainActivity extends AppCompatActivity {
         myDrawView = new MyDrawView(this);
         drawingSpace.addView(myDrawView);
         requestPermissionForExternalStorage(1);
+        try {
+            tflite = new Interpreter(loadModelFile());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 
-    private void saveImage(){
+    private MappedByteBuffer loadModelFile() throws IOException{
+        AssetFileDescriptor fileDescriptor = this.getAssets().openFd("model.tflite");
+        FileInputStream inputStream = new FileInputStream(fileDescriptor.getFileDescriptor());
+        FileChannel fileChannel = inputStream.getChannel();
+        long startOffset = fileDescriptor.getStartOffset();
+        long declaredLength = fileDescriptor.getDeclaredLength();
+        return fileChannel.map(FileChannel.MapMode.READ_ONLY,startOffset,declaredLength);
+    }
+
+    private void saveImage() {
         drawingSpace.setDrawingCacheEnabled(true);
         Bitmap b = drawingSpace.getDrawingCache();
         FileOutputStream fos = null;
-        try{
+        try {
             String path = Environment.getExternalStorageDirectory().toString();
-            File file = new File(path,"me.png");
+            File file = new File(path, "me.png");
             fos = new FileOutputStream(file);
-        }catch (Exception e){
+        } catch (Exception e) {
             e.printStackTrace();
         }
-        b.compress(Bitmap.CompressFormat.PNG,95,fos);
+        b.compress(Bitmap.CompressFormat.PNG, 95, fos);
     }
-    public void requestPermissionForExternalStorage(int requestCode){
-        if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)){
+
+    public void requestPermissionForExternalStorage(int requestCode) {
+        if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
             Toast.makeText(this.getApplicationContext(), "External Storage permission needed. Please allow in App Settings for additional functionality.", Toast.LENGTH_LONG).show();
         } else {
-            ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},requestCode);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, requestCode);
         }
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -91,14 +114,10 @@ public class MainActivity extends AppCompatActivity {
             case 1:
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-
                     //permission granted successfully
-
                 } else {
-
                     //permission denied
-                    Toast.makeText(this,"PERMISSION DENIED!!!!You cannot play the game",Toast.LENGTH_LONG).show();
-
+                    Toast.makeText(this, "PERMISSION DENIED!!!!You cannot play the game", Toast.LENGTH_LONG).show();
                 }
                 break;
         }
